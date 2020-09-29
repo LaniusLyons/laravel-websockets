@@ -95,8 +95,8 @@
             connected: false,
             chart: null,
             pusher: null,
-            port: 6001,
             app: null,
+            port: {{ $port }},
             apps: {!! json_encode($apps) !!},
             form: {
                 channel: null,
@@ -114,10 +114,11 @@
             connect() {
                 this.pusher = new Pusher(this.app.key, {
                     wsHost: this.app.host === null ? window.location.hostname : this.app.host,
-                    wsPort: this.port,
-                    wssPort: this.port,
+                    wsPort: this.port === null ? 6001 : this.port,
+                    wssPort: this.port === null ? 6001 : this.port,
+                    wsPath: this.app.path === null ? '' : this.app.path,
                     disableStats: true,
-                    authEndpoint: '/{{ request()->path() }}/auth',
+                    authEndpoint: '{{ url(request()->path().'/auth') }}',
                     auth: {
                         headers: {
                             'X-CSRF-Token': "{{ csrf_token() }}",
@@ -142,6 +143,15 @@
                     this.logs = [];
                 });
 
+                this.pusher.connection.bind('error', event => {
+                    if (event.error.data.code === 4100) {
+                        $('div#status').text("Maximum connection limit exceeded!");
+                        this.connected = false;
+                        this.logs = [];
+                        throw new Error("Over capacity");
+                    }
+                });
+
                 this.subscribeToAllChannels();
 
                 this.subscribeToStatistics();
@@ -152,7 +162,7 @@
             },
 
             loadChart() {
-                $.getJSON('/{{ request()->path() }}/api/'+this.app.id+'/statistics', (data) => {
+                $.getJSON('{{ url(request()->path().'/api') }}/' + this.app.id + '/statistics', (data) => {
 
                     let chartData = [
                         {
@@ -236,7 +246,7 @@
             },
 
             sendEvent() {
-                $.post('/{{ request()->path() }}/event', {
+                $.post('{{ url(request()->path().'/event') }}', {
                     _token: '{{ csrf_token() }}',
                     key: this.app.key,
                     secret: this.app.secret,
